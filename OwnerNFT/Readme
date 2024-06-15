@@ -1,0 +1,8 @@
+This script allows you to know if an account is owner of a specific NFT.
+To use this script follow the next steps:
+  Replace:
+    contract_address = ''  # Replace with your ERC-721 contract address
+    account = ''  # Replace with the account address to check
+    network = ''  # Replace with the network. Use an integer
+    id = '' # Replace with the nft id. Use an integer
+    id_application = '' # Replace with the id_application
