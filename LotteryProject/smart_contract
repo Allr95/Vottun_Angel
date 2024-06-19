@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+interface IVottunAPI {
+    function verifyTicket(string calldata ticketId) external view returns (bool);
+}
+
+contract Lottery is Ownable, ReentrancyGuard {
+    using Counters for Counters.Counter;
+    Counters.Counter private _ticketIds;
+
+    IVottunAPI private vottunAPI;
+
+    uint256 public ticketPrice;
+    address[] public players;
+    mapping(uint256 => address) public ticketIdToOwner;
+
+    event TicketPurchased(address indexed buyer, uint256 ticketId);
+    event WinnerDeclared(address indexed winner, uint256 prize);
+
+    constructor(address vottunAPIAddress, uint256 _ticketPrice) {
+        vottunAPI = IVottunAPI(vottunAPIAddress);
+        ticketPrice = _ticketPrice;
+    }
+
+    function buyTicket() external payable nonReentrant {
+        require(msg.value == ticketPrice, "Incorrect ticket price");
+
+        _ticketIds.increment();
+        uint256 newTicketId = _ticketIds.current();
+        ticketIdToOwner[newTicketId] = msg.sender;
+        players.push(msg.sender);
+
+        emit TicketPurchased(msg.sender, newTicketId);
+    }
+
+    function drawWinner() external onlyOwner nonReentrant {
+        require(players.length > 0, "No players in the lottery");
+
+        uint256 winnerIndex = random() % players.length;
+        address winner = players[winnerIndex];
+        uint256 prize = address(this).balance;
+
+        (bool success,) = winner.call{value: prize}("");
+        require(success, "Transfer failed");
+
+        emit WinnerDeclared(winner, prize);
+
+        // Reset the lottery for the next round
+        players = new address ;
+    }
+
+    function random() private view returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, players)));
+    }
+
+    function verifyTicket(uint256 ticketId) external view returns (bool) {
+        address owner = ticketIdToOwner[ticketId];
+        require(owner != address(0), "Ticket does not exist");
+
+        string memory ticketIdStr = uintToString(ticketId);
+        return vottunAPI.verifyTicket(ticketIdStr);
+    }
+
+    function uintToString(uint256 v) private pure returns (string memory) {
+        if (v == 0) {
+            return "0";
+        }
+        uint256 j = v;
+        uint256 length;
+        while (j != 0) {
+            length++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(length);
+        uint256 k = length;
+        while (v != 0) {
+            k = k - 1;
+            uint8 temp = (48 + uint8(v - v / 10 * 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            v /= 10;
+        }
+        return string(bstr);
+    }
+
+    receive() external payable {}
+}
